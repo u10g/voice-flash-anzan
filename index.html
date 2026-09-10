@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0E1420">
+<link rel="icon" href="favicon.svg">
+<title>周辺視フラッシュ暗算</title>
+<style>
+  :root{
+    --ink:#0E1420; --ink-2:#141C2B; --line:#26324A;
+    --num:#E9EEF6; --dim:#7C8CA6;
+    --ok:#4ED18B; --ng:#FF6B5B; --live:#FFB454;
+    --edge:transparent;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{height:100%}
+  body{
+    height:100vh; height:100dvh;
+    background:var(--ink);color:var(--num);
+    font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;
+    -webkit-user-select:none;user-select:none;
+    -webkit-text-size-adjust:100%;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+  #edge{position:fixed;inset:0;pointer-events:none;z-index:50;border:10px solid var(--edge);transition:border-color .12s linear}
+
+  #banner{display:none;background:#3A2230;border-bottom:1px solid #6E3040;color:var(--num);
+          font-size:13px;line-height:1.5;padding:10px 16px}
+  #banner.show{display:block}
+
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;font-size:13px;color:var(--dim);flex:none}
+  header b{color:var(--num);font-variant-numeric:tabular-nums;font-weight:600}
+  #mic{margin-left:auto;display:flex;align-items:center;gap:6px}
+  #micdot{width:9px;height:9px;border-radius:50%;background:#3A4459;flex:none}
+  #micdot.on{background:var(--live);box-shadow:0 0 10px var(--live)}
+
+  main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;min-height:0;width:100%;overflow:hidden}
+  #display{font-size:min(38vw,32vh);font-size:min(38vw,32dvh);font-weight:800;line-height:.95;
+           font-variant-numeric:tabular-nums;letter-spacing:-.02em;text-align:center;white-space:nowrap;max-width:100%}
+  #display.small{font-size:min(16vw,14vh);font-size:min(16vw,14dvh);letter-spacing:0}
+  #heard{position:absolute;bottom:26px;font-size:15px;color:var(--dim);min-height:20px;padding:0 16px;text-align:center}
+  #meter{position:absolute;bottom:10px;width:60%;height:6px;border-radius:3px;background:#1B2537;overflow:hidden;display:none}
+  #meter.show{display:block}
+  #meterFill{height:100%;width:0;background:var(--live);transition:width .05s linear}
+  #meterMark{position:absolute;top:0;bottom:0;width:2px;background:var(--ng)}
+
+  #pad{display:none;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px;max-width:420px;width:100%;margin:0 auto;flex:none}
+  #pad.show{display:grid}
+  #pad button{background:var(--ink-2);color:var(--num);border:1px solid var(--line);border-radius:12px;
+              padding:16px 0;min-height:56px;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+  #pad button:active{background:#1E2942}
+
+  #bar{display:flex;gap:8px;padding:10px 16px 14px;flex:none}
+  #bar button{flex:1;padding:15px 0;min-height:48px;border-radius:12px;border:1px solid var(--line);
+              background:var(--ink-2);color:var(--num);font-size:16px;font-weight:600;font-family:inherit}
+  #run{background:#22314E;border-color:#35507E}
+  #run.stop{background:#3A2230;border-color:#6E3040}
+
+  details{border-top:1px solid var(--line);background:var(--ink-2);flex:none}
+  summary{padding:14px 16px;font-size:14px;color:var(--dim);cursor:pointer}
+  .cfg{padding:0 16px 16px;display:grid;gap:12px;max-height:46vh;max-height:46dvh;overflow:auto}
+  .row{display:flex;align-items:center;gap:12px;font-size:14px}
+  .row>span:first-child{width:8.5em;color:var(--dim);flex:none}
+  select,input[type=number],input[type=range]{flex:1;background:var(--ink);color:var(--num);border:1px solid var(--line);
+    border-radius:8px;padding:9px 10px;font-size:16px;font-family:inherit}
+  input[type=range]{padding:0}
+  .seg{display:flex;flex:1;gap:6px;flex-wrap:wrap}
+  .seg button{flex:1 1 auto;min-width:5.5em;min-height:44px;padding:10px 4px;border-radius:8px;border:1px solid var(--line);
+              background:var(--ink);color:var(--dim);font-size:13px;font-family:inherit}
+  .seg button.sel{background:#22314E;border-color:#35507E;color:var(--num)}
+  .seg button:disabled{opacity:.35}
+  .note{font-size:12px;color:var(--dim);line-height:1.65}
+  #diag{border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:8px;font-size:13px}
+  #diag h3{font-size:13px;font-weight:600;color:var(--num)}
+  #diag .k{display:flex;gap:8px;align-items:baseline}
+  #diag .k>span:first-child{width:9em;color:var(--dim);flex:none}
+  #diag .btns{display:flex;gap:8px;flex-wrap:wrap}
+  #diag button{background:var(--ink);color:var(--num);border:1px solid var(--line);border-radius:8px;
+               min-height:44px;padding:10px 12px;font-size:13px;font-family:inherit}
+  #diagText{display:none;width:100%;height:8em;background:var(--ink);color:var(--num);border:1px solid var(--line);
+            border-radius:8px;padding:8px;font-size:12px;font-family:ui-monospace,monospace;-webkit-user-select:text;user-select:text}
+  #diagText.show{display:block}
+  .good{color:var(--ok)} .bad{color:var(--ng)} .warn{color:var(--live)}
+  :focus-visible{outline:2px solid var(--live);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){#edge,#meterFill{transition:none}}
+</style>
+</head>
+<body>
+<div id="edge"></div>
+<div id="banner"></div>
+
+<header>
+  <span>出題 <b id="sTotal">0</b></span>
+  <span>正答 <b id="sOk">0</b></span>
+  <span>平均 <b id="sAvg">–</b>秒</span>
+  <span id="mic"><span id="micdot"></span><span id="micTxt">待機</span></span>
+</header>
+
+<main>
+  <div id="display">–</div>
+  <div id="heard"></div>
+  <div id="meter"><div id="meterFill"></div><div id="meterMark"></div></div>
+</main>
+
+<div id="pad">
+  <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+  <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+  <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+  <button data-k="-">±</button><button data-k="0">0</button><button data-k="C">C</button>
+</div>
+
+<div id="bar">
+  <button id="run">開始</button>
+  <button id="replay">もう一度表示</button>
+</div>
+
+<details id="cfgPanel">
+  <summary>設定 / 環境チェック</summary>
+  <div class="cfg">
+
+    <div id="diag">
+      <h3>この環境で使えるもの</h3>
+      <div class="k"><span>端末 / ブラウザ</span><span id="dEnv">–</span></div>
+      <div class="k"><span>保護された接続</span><span id="dSec">–</span></div>
+      <div class="k"><span>起動方法</span><span id="dMode">–</span></div>
+      <div class="k"><span>音声認識API</span><span id="dSR">–</span></div>
+      <div class="k"><span>マイク入力</span><span id="dMic">–</span></div>
+      <div class="k"><span>直近のエラー</span><span id="dErr">–</span></div>
+      <div class="btns">
+        <button id="testSR">音声認識を試す</button>
+        <button id="testMic">マイクを試す</button>
+        <button id="copyDiag">診断をコピー</button>
+      </div>
+      <textarea id="diagText" readonly></textarea>
+      <p class="note" id="diagNote">「開始」の前に両方を押して、使える方式を確認する。</p>
+      <p class="note">音声認識中、音声はブラウザから Apple / Google の認識サーバへ送信される。このページ自体は通信も保存も行わない。</p>
+    </div>
+
+    <div class="row"><span>解答方法</span>
+      <div class="seg" id="segInput">
+        <button data-v="voice" class="sel">音声認識</button>
+        <button data-v="tap">タップして発話</button>
+        <button data-v="burst">発声検出</button>
+        <button data-v="pad">タップ入力</button>
+      </div>
+    </div>
+    <p class="note">
+      音声認識は常時聞き取り、タップして発話は画面を押した直後だけ聞き取る（常時が不安定な端末向け）。<br>
+      発声検出は言葉を認識しない。声を出したことだけを検知して答えを表示し、自分で正誤を確認する方式。マイク権限だけで動く。
+    </p>
+
+    <div class="row"><span>発声のしきい値</span><input type="range" id="thr" min="2" max="60" value="14"></div>
+
+    <div class="row"><span>表示</span>
+      <div class="seg" id="segMode">
+        <button data-v="static" class="sel">式を出したまま</button>
+        <button data-v="flash">フラッシュ</button>
+      </div>
+    </div>
+    <div class="row"><span>項数</span><input type="number" id="terms" value="2" min="2" max="6"></div>
+    <div class="row"><span>桁数</span><input type="number" id="digits" value="1" min="1" max="3"></div>
+    <div class="row"><span>演算</span>
+      <select id="ops">
+        <option value="add">たし算のみ</option>
+        <option value="addsub">たし算・ひき算</option>
+        <option value="mul">かけ算（2項）</option>
+      </select>
+    </div>
+    <div class="row"><span>フラッシュ速度</span><input type="number" id="flashMs" value="400" min="80" max="2000" step="20"></div>
+    <div class="row"><span>出題間隔（秒）</span>
+      <input type="number" id="gapMin" value="3" min="0" max="120">
+      <input type="number" id="gapMax" value="8" min="0" max="120">
+    </div>
+    <div class="row"><span>出題の合図音</span>
+      <div class="seg" id="segCue"><button data-v="off" class="sel">鳴らさない</button><button data-v="on">鳴らす</button></div>
+    </div>
+    <div class="row"><span>正誤の音</span>
+      <div class="seg" id="segFb"><button data-v="on" class="sel">鳴らす</button><button data-v="off">鳴らさない</button></div>
+    </div>
+
+    <p class="note">
+      出題間隔は最小〜最大でランダム。同じ値なら固定。<br>
+      合図音を鳴らさなければ、自分から見にいかないと出題に気づけない。周辺視の練習はこの設定を推奨。<br>
+      正解するまで次に進まない。フラッシュは未回答なら無音で自動再表示。
+    </p>
+  </div>
+</details>
+
+<script>
+(function(){
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const disp=$('#display'), heard=$('#heard'), micdot=$('#micdot'), micTxt=$('#micTxt');
+  const runBtn=$('#run'), replayBtn=$('#replay'), pad=$('#pad'), banner=$('#banner');
+  const meter=$('#meter'), meterFill=$('#meterFill'), meterMark=$('#meterMark');
+  const cfgPanel=$('#cfgPanel'), mainEl=document.querySelector('main');
+
+  const cfg={input:'voice',mode:'static',terms:2,digits:1,ops:'add',
+             flashMs:400,gapMin:3,gapMax:8,cue:false,feedback:true,thr:14};
+  let running=false, problem=null, shownAt=0, timers=[], typed='';
+  let stats={total:0,ok:0,sum:0};
+
+  const setText=(el,txt,cls)=>{ el.textContent=txt; el.className=cls||''; };
+  const setHeard=t=>{ heard.textContent=t; };
+
+  // 数式が画面幅を超えないよう、描画後に文字サイズを詰める
+  function fitDisp(){
+    disp.style.fontSize='';
+    const maxW=mainEl.clientWidth-16;
+    if(maxW<=0 || !disp.textContent) return;
+    let size=parseFloat(getComputedStyle(disp).fontSize), guard=0;
+    while(disp.scrollWidth>maxW && size>18 && guard++<60){ size*=0.92; disp.style.fontSize=size+'px'; }
+  }
+  function setDisp(txt,small){
+    disp.classList.toggle('small', !!small);
+    disp.textContent=txt;
+    fitDisp();
+  }
+  addEventListener('resize', fitDisp);
+  addEventListener('orientationchange', fitDisp);
+
+  /* ---------- 環境判定 ---------- */
+  const ua = navigator.userAgent;
+  const env = {
+    ios: /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1),
+    android: /Android/.test(ua),
+    inApp: /(FBAN|FBAV|Instagram|Line\/|MicroMessenger|TwitterAndroid)/i.test(ua),
+    standalone: !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)),
+    secure: window.isSecureContext !== false
+  };
+  env.iosOtherBrowser = env.ios && /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  env.mobile = env.ios || env.android;
+  env.name = (env.ios ? 'iOS' : env.android ? 'Android' : 'PC/その他') + ' / ' +
+             (env.iosOtherBrowser ? 'Safari以外(iOS)' :
+              env.inApp ? 'アプリ内ブラウザ' :
+              /Edg/.test(ua) ? 'Edge' :
+              /Chrome|CriOS/.test(ua) ? 'Chrome' :
+              /Firefox|FxiOS/.test(ua) ? 'Firefox' :
+              /Safari/.test(ua) ? 'Safari' : '不明');
+
+  /* ---------- 音 ---------- */
+  let ac=null, audioBusyUntil=0;
+  function ctx(){ ac = ac || new (window.AudioContext||window.webkitAudioContext)(); return ac; }
+  function audioSession(type){
+    try{ if(navigator.audioSession) navigator.audioSession.type=type; }catch(e){}
+  }
+  function beep(f,d,g){
+    try{
+      const c=ctx(), o=c.createOscillator(), v=c.createGain();
+      o.type='sine'; o.frequency.value=f;
+      v.gain.setValueAtTime(g,c.currentTime);
+      v.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d);
+      o.connect(v).connect(c.destination); o.start(); o.stop(c.currentTime+d);
+      // iOS では再生と認識が競合する。再生直後は認識の再起動を遅らせる。
+      audioBusyUntil = Date.now() + d*1000 + 350;
+    }catch(e){}
+  }
+  const okTone=()=>{ if(cfg.feedback){ beep(660,.09,.06); setTimeout(()=>beep(990,.12,.06),90);} };
+  const ngTone=()=>{ if(cfg.feedback) beep(180,.16,.05); };
+  const cueTone=()=>{ if(cfg.cue) beep(760,.08,.04); };
+
+  const setEdge=c=>document.documentElement.style.setProperty('--edge',c);
+
+  /* ---------- 出題 ---------- */
+  const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  function makeProblem(){
+    const lo=cfg.digits===1?1:Math.pow(10,cfg.digits-1), hi=Math.pow(10,cfg.digits)-1;
+    if(cfg.ops==='mul'){ const a=rnd(lo,hi),b=rnd(lo,hi);
+      return {terms:[a,b],signs:['×'],answer:a*b,text:a+' × '+b}; }
+    const n=Math.max(2,Math.min(6,cfg.terms));
+    let terms=[rnd(lo,hi)],signs=[],total=terms[0],text=String(terms[0]);
+    for(let i=1;i<n;i++){
+      let sign=(cfg.ops==='addsub'&&Math.random()<.4)?'−':'+';
+      const v=rnd(lo,hi);
+      if(sign==='−'&&total-v<0) sign='+';
+      total += sign==='+'?v:-v;
+      terms.push(v); signs.push(sign); text+=' '+sign+' '+v;
+    }
+    return {terms,signs,answer:total,text};
+  }
+  const clearTimers=()=>{timers.forEach(clearTimeout);timers=[];};
+  const later=(f,ms)=>timers.push(setTimeout(f,ms));
+
+  function scheduleNext(){
+    if(!running) return;
+    clearTimers(); problem=null;
+    setDisp('·',true); setEdge('transparent');
+    const a=Math.min(cfg.gapMin,cfg.gapMax), b=Math.max(cfg.gapMin,cfg.gapMax);
+    later(present,(a+Math.random()*(b-a))*1000);
+  }
+  function present(){
+    problem=makeProblem(); typed=''; setHeard(cfg.input==='tap'?'画面をタップして発話':'');
+    stats.total++; render(); cueTone(); show();
+  }
+  function show(){
+    clearTimers(); setEdge('transparent'); shownAt=performance.now();
+    if(cfg.mode==='static'){
+      setDisp(problem.text, problem.text.length>9); return;
+    }
+    let t=0;
+    problem.terms.forEach((v,i)=>{
+      const label=(i===0?'':problem.signs[i-1])+v;
+      later(()=>setDisp(label,false),t); t+=cfg.flashMs;
+      later(()=>setDisp('',false), t-Math.max(40,cfg.flashMs*0.15));
+    });
+    later(()=>setDisp('?',false),t);
+    later(show,t+6000);
+  }
+  function correct(){
+    const sec=(performance.now()-shownAt)/1000;
+    stats.ok++; stats.sum+=sec; render();
+    okTone(); setEdge('var(--ok)');
+    setDisp(String(problem.answer),false);
+    problem=null; clearTimers(); later(scheduleNext,900);
+  }
+  function judge(n){
+    if(!problem||n===null) return;
+    if(n===problem.answer) correct();
+    else{ ngTone(); setEdge('var(--ng)'); later(()=>{ if(problem) setEdge('transparent'); },400); }
+  }
+  function reveal(){ // 発声検出モード：答えを見せて自己採点
+    if(!problem) return;
+    const sec=(performance.now()-shownAt)/1000;
+    stats.ok++; stats.sum+=sec; render();
+    okTone(); setEdge('var(--live)');
+    setDisp(String(problem.answer),false);
+    setHeard('答え合わせ');
+    problem=null; clearTimers(); later(scheduleNext,1400);
+  }
+  function render(){
+    $('#sTotal').textContent=stats.total; $('#sOk').textContent=stats.ok;
+    $('#sAvg').textContent = stats.ok? (stats.sum/stats.ok).toFixed(1):'–';
+  }
+
+  /* ---------- 数値解釈 ---------- */
+  const KANJI={'〇':0,'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+  function kanjiNum(s){
+    let total=0,cur=0,seen=false;
+    for(const ch of s){
+      if(ch in KANJI){cur=KANJI[ch];seen=true;}
+      else if(ch==='十'){total+=(cur||1)*10;cur=0;seen=true;}
+      else if(ch==='百'){total+=(cur||1)*100;cur=0;seen=true;}
+      else if(ch==='千'){total+=(cur||1)*1000;cur=0;seen=true;}
+      else return null;
+    }
+    return seen? total+cur : null;
+  }
+
+  // かな読み（「じゅうご」「にじゅうさん」など）。単字の助詞を数値と誤解しないよう2文字以上のみ採用。
+  const KANA_DIGIT={'ぜろ':0,'れい':0,'いち':1,'に':2,'さん':3,'よん':4,'し':4,'ご':5,
+                    'ろく':6,'なな':7,'しち':7,'はち':8,'きゅう':9,'く':9};
+  const KANA_UNIT={'じゅう':10,'じゅっ':10,'じっ':10,'ひゃく':100,'びゃく':100,'ぴゃく':100,
+                   'せん':1000,'ぜん':1000};
+  const KANA_KEYS=Object.keys(KANA_DIGIT).concat(Object.keys(KANA_UNIT)).sort((a,b)=>b.length-a.length);
+  const toHira=s=>s.replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+  function kanaNums(s){
+    const out=[]; let i=0, total=0, cur=0, seen=false, start=0, len=0;
+    const flush=()=>{ if(seen && len>=2) out.push({v:total+cur,i:start}); total=0;cur=0;seen=false;len=0; };
+    while(i<s.length){
+      let m=null;
+      for(const k of KANA_KEYS){ if(s.startsWith(k,i)){ m=k; break; } }
+      if(m){
+        if(!seen) start=i;
+        if(KANA_UNIT[m]!=null){ total+=(cur||1)*KANA_UNIT[m]; cur=0; }
+        else cur=KANA_DIGIT[m];
+        seen=true; len+=m.length; i+=m.length;
+      }else{ flush(); i++; }
+    }
+    flush();
+    return out;
+  }
+
+  const NEG=/(マイナス|まいなす|ひく|引く|-|−|ー)$/;
+  function parseNums(text){
+    const t=String(text)
+      .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+      .replace(/[,、\s]/g,'');
+    const found=[]; let m;
+    const reDigit=/\d+/g;
+    while((m=reDigit.exec(t))) found.push({v:parseInt(m[0],10), i:m.index});
+    const reKanji=/[〇零一二三四五六七八九十百千]+/g;
+    while((m=reKanji.exec(t))){ const v=kanjiNum(m[0]); if(v!==null) found.push({v:v, i:m.index}); }
+    const reKana=/[ぁ-んァ-ヶー]+/g;
+    while((m=reKana.exec(t))){
+      const base=m.index;
+      for(const r of kanaNums(toHira(m[0]))) found.push({v:r.v, i:base+r.i});
+    }
+    found.sort((a,b)=>a.i-b.i);
+    // 「マイナス」「ひく」の直後の数値だけ符号を反転する
+    return found.map(f=> NEG.test(t.slice(Math.max(0,f.i-6), f.i)) ? -f.v : f.v);
+  }
+
+  /* ---------- 環境チェック表示 ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const hasGUM = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  let srUsable=null, micUsable=null, lastError='';
+
+  function noteError(code){ lastError=code; setText($('#dErr'), code||'–', code?'bad':''); }
+
+  setText($('#dEnv'), env.name);
+  setText($('#dSec'), env.secure?'はい（HTTPS / localhost）':'いいえ（音声認識・マイクは使えない）', env.secure?'good':'bad');
+  setText($('#dMode'), env.standalone?'ホーム画面（standalone）':'ブラウザ', env.standalone?'warn':'');
+  setText($('#dSR'), SR?'オブジェクトあり（要テスト）':'なし', SR?'warn':'bad');
+  setText($('#dMic'), hasGUM?'APIあり（要テスト）':'なし', hasGUM?'warn':'bad');
+  if(!SR){
+    document.querySelector('#segInput button[data-v="voice"]').disabled=true;
+    document.querySelector('#segInput button[data-v="tap"]').disabled=true;
+  }
+  if(!hasGUM) document.querySelector('#segInput button[data-v="burst"]').disabled=true;
+
+  function showBanner(msg){ banner.textContent=msg; banner.classList.add('show'); }
+  if(!env.secure) showBanner('HTTPS で開いていないため、音声認識とマイクは使えない。https:// のURLで開くこと。');
+  else if(env.standalone) showBanner('ホーム画面から起動しているため音声認識が動かないことがある。うまく動かないときは Safari で開く。');
+  else if(env.iosOtherBrowser) showBanner('iOS では Safari 以外のブラウザで音声認識が使えない。Safari で開くこと。');
+  else if(env.inApp) showBanner('アプリ内ブラウザでは音声認識が使えないことがある。Safari / Chrome で開くこと。');
+
+  $('#testSR').onclick = ()=>{
+    if(!SR){ setText($('#dSR'),'なし','bad'); return; }
+    setText($('#dSR'),'テスト中…','warn');
+    let r;
+    try{ r=new SR(); }catch(e){ setText($('#dSR'),'生成失敗','bad'); return; }
+    r.lang='ja-JP'; r.interimResults=true;
+    let got=false;
+    r.onresult=()=>{ got=true; srUsable=true; setText($('#dSR'),'使える','good'); };
+    r.onstart=()=>{ setText($('#dSR'),'起動した。何か話す','warn'); };
+    r.onerror=e=>{
+      noteError(e.error);
+      const m={'service-not-allowed':'このアプリでは音声認識が許可されていない','not-allowed':'マイクが拒否された',
+               'no-speech':'起動はしたが声を検出せず','audio-capture':'マイクを取得できない','network':'ネットワークエラー'};
+      if(e.error==='no-speech'){ srUsable=true; setText($('#dSR'),'起動は成功（声なし）','good'); }
+      else{ srUsable=false; setText($('#dSR'), m[e.error]||e.error, 'bad'); }
+    };
+    r.onend=()=>{ if(!got && srUsable===null){ setText($('#dSR'),'応答なし','bad'); srUsable=false; } };
+    try{ r.start(); setTimeout(()=>{try{r.stop();}catch(e){}},6000); }
+    catch(e){ setText($('#dSR'),'起動失敗','bad'); srUsable=false; }
+  };
+
+  $('#testMic').onclick = async ()=>{
+    if(!hasGUM) return;
+    setText($('#dMic'),'テスト中…','warn');
+    try{
+      const s=await navigator.mediaDevices.getUserMedia({audio:true});
+      s.getTracks().forEach(t=>t.stop());
+      micUsable=true; setText($('#dMic'),'使える','good');
+      if(srUsable===false){
+        switchTo('burst','音声認識は不可、マイクは可。発声検出モードを選択した。');
+        $('#diagNote').textContent='音声認識は不可、マイクは可。発声検出モードを選択した。';
+      }
+    }catch(e){
+      micUsable=false; noteError(e.name);
+      setText($('#dMic'), e.name, 'bad');
+      $('#diagNote').textContent='マイクを取得できない。タップ入力を使う。';
+    }
+  };
+
+  $('#copyDiag').onclick = async ()=>{
+    const lines=[
+      'env: '+env.name,
+      'ua: '+ua,
+      'secureContext: '+env.secure,
+      'standalone: '+env.standalone,
+      'online: '+navigator.onLine,
+      'SpeechRecognition: '+(!!SR)+' / usable: '+srUsable,
+      'getUserMedia: '+hasGUM+' / usable: '+micUsable,
+      'input: '+cfg.input,
+      'lastError: '+(lastError||'-')
+    ].join('\n');
+    const box=$('#diagText');
+    box.value=lines; box.classList.add('show');
+    try{ await navigator.clipboard.writeText(lines); $('#diagNote').textContent='診断をコピーした。'; }
+    catch(e){ $('#diagNote').textContent='コピーできないため下のテキストを選択して使う。'; }
+  };
+
+  /* ---------- 音声認識（常時リッスン） ---------- */
+  let rec=null, wantMic=false, startedAt=0, backoff=250, failStreak=0, netFail=0, restartTimer=0;
+  const BACKOFF_MIN=250, BACKOFF_MAX=4000, FAIL_LIMIT=5;
+  const micState=(on,label)=>{ micdot.classList.toggle('on',on); micTxt.textContent=label; };
+
+  function newRec(continuous){
+    const r=new SR();
+    r.lang='ja-JP'; r.continuous=continuous; r.interimResults=true;
+    try{ r.maxAlternatives=3; }catch(e){}
+    return r;
+  }
+
+  function handleResult(e){
+    backoff=BACKOFF_MIN; failStreak=0; netFail=0;
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res=e.results[i];
+      const alts=Math.min(res.length, 3);
+      setHeard(res[0].transcript);
+      let finalNum=null;
+      for(let a=0;a<alts;a++){
+        const nums=parseNums(res[a].transcript);
+        for(const n of nums){ if(problem && n===problem.answer){ judge(n); return; } }
+        if(res.isFinal && finalNum===null && nums.length) finalNum=nums[nums.length-1];
+      }
+      if(res.isFinal && finalNum!==null) judge(finalNum);
+    }
+  }
+
+  function scheduleRestart(){
+    if(!wantMic || !rec) return;
+    clearTimeout(restartTimer);
+    const wait=Math.max(backoff, audioBusyUntil-Date.now(), 0);
+    restartTimer=setTimeout(()=>{
+      if(!wantMic || !rec) return;
+      try{ startedAt=Date.now(); rec.start(); }
+      catch(err){
+        if(err && err.name==='InvalidStateError') return; // すでに動作中
+        backoff=Math.min(BACKOFF_MAX, backoff*2);
+        scheduleRestart();
+      }
+    }, wait);
+  }
+
+  function startSR(){
+    if(!SR) return switchTo(hasGUM?'burst':'pad','音声認識APIがない');
+    wantMic=true; if(rec) return;
+    failStreak=0; netFail=0; backoff=BACKOFF_MIN;
+    audioSession('play-and-record');
+    rec=newRec(true);
+    rec.onstart=()=>{ startedAt=Date.now(); micState(true,'聞き取り中'); };
+    rec.onresult=handleResult;
+    rec.onerror=e=>{
+      noteError(e.error);
+      if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){
+        wantMic=false;
+        switchTo(hasGUM?'burst':'pad','音声認識が使えない（'+e.error+'）ため切り替えた');
+      }else if(e.error==='network'){
+        netFail++; backoff=Math.min(BACKOFF_MAX, Math.max(backoff*2, 1000));
+        if(netFail>=3) setHeard('ネットワークエラーが続いている。通信状態を確認する。');
+      }
+    };
+    rec.onend=()=>{
+      if(!wantMic){ micState(false,'停止'); return; }
+      micState(false,'再接続');
+      // Android Chrome は continuous が効かず1発話ごとに終了する。iOS も途中で切れる。
+      // 起動直後に終わる場合だけ失敗とみなし、バックオフを伸ばす。
+      if(Date.now()-startedAt < 500){
+        failStreak++; backoff=Math.min(BACKOFF_MAX, backoff*2);
+      }else{
+        failStreak=0; backoff=BACKOFF_MIN;
+      }
+      if(failStreak>=FAIL_LIMIT){
+        wantMic=false;
+        switchTo(hasGUM?'burst':'pad','音声認識が続かないため切り替えた');
+        return;
+      }
+      scheduleRestart();
+    };
+    try{ startedAt=Date.now(); rec.start(); }catch(e){ scheduleRestart(); }
+  }
+  function stopSR(){
+    wantMic=false; clearTimeout(restartTimer);
+    if(rec){ try{rec.onend=null; rec.stop();}catch(e){} try{rec.abort();}catch(e){} rec=null; }
+    audioSession('auto');
+    micState(false,'停止');
+  }
+
+  /* ---------- 音声認識（タップして発話・単発） ---------- */
+  let tapRec=null, tapTimer=0;
+  function startTapListen(){
+    if(!SR || cfg.input!=='tap' || tapRec) return;
+    try{ ctx().resume(); }catch(e){}
+    audioSession('play-and-record');
+    const r=newRec(false);
+    tapRec=r;
+    const finish=()=>{ clearTimeout(tapTimer); if(tapRec===r) tapRec=null; micState(false,'タップで発話'); };
+    r.onstart=()=>micState(true,'聞き取り中');
+    r.onresult=handleResult;
+    r.onerror=e=>{
+      noteError(e.error);
+      if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture')
+        switchTo(hasGUM?'burst':'pad','音声認識が使えない（'+e.error+'）ため切り替えた');
+    };
+    r.onend=finish;
+    try{ r.start(); tapTimer=setTimeout(()=>{ try{r.stop();}catch(e){} },5000); }
+    catch(e){ finish(); }
+  }
+  function stopTapListen(){
+    clearTimeout(tapTimer);
+    if(tapRec){ try{tapRec.onend=null; tapRec.abort();}catch(e){} tapRec=null; }
+    audioSession('auto');
+  }
+
+  /* ---------- 発声検出（getUserMediaのみ） ---------- */
+  let stream=null, analyser=null, raf=0, loud=0;
+  async function startBurst(){
+    if(!hasGUM) return switchTo('pad','マイクAPIがない');
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    }catch(e){ noteError(e.name); return switchTo('pad','マイクを取得できない（'+e.name+'）'); }
+    const c=ctx(); try{ c.resume(); }catch(e){}
+    const src=c.createMediaStreamSource(stream);
+    analyser=c.createAnalyser(); analyser.fftSize=1024; src.connect(analyser);
+    const buf=new Float32Array(analyser.fftSize);
+    meter.classList.add('show'); micState(true,'発声待ち');
+    const loop=()=>{
+      if(!analyser) return;
+      analyser.getFloatTimeDomainData(buf);
+      let sum=0; for(let i=0;i<buf.length;i++) sum+=buf[i]*buf[i];
+      const rms=Math.sqrt(sum/buf.length);
+      const level=Math.min(100, rms*400);
+      meterFill.style.width=level+'%';
+      meterMark.style.left=cfg.thr+'%';
+      if(level>cfg.thr){ loud++; } else { loud=0; }
+      if(loud>8 && problem){ loud=0; reveal(); }
+      raf=requestAnimationFrame(loop);
+    };
+    loop();
+  }
+  function stopBurst(){
+    cancelAnimationFrame(raf); meter.classList.remove('show');
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    analyser=null; micState(false,'停止');
+  }
+
+  function stopListening(){ stopSR(); stopTapListen(); stopBurst(); }
+  function startListening(){
+    stopListening();
+    if(cfg.input==='voice') startSR();
+    else if(cfg.input==='tap') micState(false,'タップで発話');
+    else if(cfg.input==='burst') startBurst();
+    else micState(false,'タップ入力');
+  }
+  function switchTo(v,msg){
+    cfg.input=v;
+    document.querySelectorAll('#segInput button').forEach(b=>b.classList.toggle('sel',b.dataset.v===v));
+    pad.classList.toggle('show', v==='pad');
+    if(msg) setHeard(msg);
+    if(running) startListening(); else stopListening();
+  }
+
+  /* ---------- 画面消灯抑止 ---------- */
+  let lock=null;
+  async function keepAwake(on){
+    try{
+      if(on && 'wakeLock' in navigator){ lock=await navigator.wakeLock.request('screen'); }
+      else if(lock){ lock.release(); lock=null; }
+    }catch(e){ lock=null; }
+  }
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){ stopListening(); }
+    else if(running){ keepAwake(true); startListening(); }
+  });
+  window.addEventListener('pagehide',()=>{ stopListening(); });
+
+  /* ---------- 操作 ---------- */
+  runBtn.onclick=()=>{
+    running=!running;
+    runBtn.textContent = running?'停止':'開始';
+    runBtn.classList.toggle('stop',running);
+    if(running){ try{ctx().resume();}catch(e){} keepAwake(true); startListening(); present(); }
+    else{ clearTimers(); stopListening(); keepAwake(false); problem=null;
+          setDisp('–',true); setEdge('transparent'); }
+  };
+  replayBtn.onclick=()=>{ if(problem) show(); };
+  mainEl.addEventListener('click',()=>{ if(running && cfg.input==='tap') startTapListen(); });
+
+  pad.onclick=e=>{
+    const k=e.target.dataset.k; if(!k) return;
+    if(k==='C') typed='';
+    else if(k==='-') typed = typed.startsWith('-')? typed.slice(1) : '-'+typed;
+    else typed+=k;
+    setHeard(typed);
+    const n=parseInt(typed,10);
+    if(!isNaN(n)&&problem&&n===problem.answer){ typed=''; judge(n); }
+  };
+
+  function seg(id,fn){
+    document.querySelectorAll('#'+id+' button').forEach(b=>{
+      b.onclick=()=>{
+        if(b.disabled) return;
+        document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.remove('sel'));
+        b.classList.add('sel'); fn(b.dataset.v);
+      };
+    });
+  }
+  seg('segInput', v=>{ cfg.input=v; pad.classList.toggle('show',v==='pad'); if(running) startListening(); else stopListening(); });
+  seg('segMode', v=>cfg.mode=v);
+  seg('segCue',  v=>cfg.cue=(v==='on'));
+  seg('segFb',   v=>cfg.feedback=(v==='on'));
+
+  const bind=(id,key)=>{ $('#'+id).oninput=e=>cfg[key]=Number(e.target.value); };
+  ['terms','digits','flashMs','gapMin','gapMax','thr'].forEach(k=>bind(k,k));
+  $('#ops').onchange=e=>cfg.ops=e.target.value;
+
+  /* ---------- 初期状態 ---------- */
+  if(!SR) switchTo(hasGUM?'burst':'pad');
+  cfgPanel.open = !env.mobile;   // モバイルは表示領域を空けるため初期は閉じる
+})();
+</script>
+</body>
+</html>
